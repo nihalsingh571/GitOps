@@ -44,5 +44,3 @@ spec:
     syncOptions:
       # createNamespace: true → ArgoCD creates gitops-app namespace if missing
       - CreateNamespace=true
-      # ServerSideApply: true → uses server-side apply (avoids annotation size limits)
-      - ServerSideApply=true
