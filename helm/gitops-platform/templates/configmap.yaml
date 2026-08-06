@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+# ConfigMaps store NON-SECRET configuration.
+# Rule of thumb: if you'd be embarrassed seeing it in a public log, use a Secret.
+# Database hostname, port, and name are fine in a ConfigMap.
+data:
+  DB_HOST: "postgres"        # CoreDNS resolves "postgres" → postgres Service ClusterIP
+  DB_PORT: "5432"
+  # DB_NAME, DB_USER, DB_PASS come from the Secret (sensitive)

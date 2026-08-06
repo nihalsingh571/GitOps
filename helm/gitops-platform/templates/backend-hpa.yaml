@@ -1,0 +1,43 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend   # must match the Deployment name exactly
+
+  minReplicas: {{ .Values.backend.hpa.minReplicas }}
+  maxReplicas: {{ .Values.backend.hpa.maxReplicas }}
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          # AverageUtilization = (actual CPU used / CPU requested) * 100
+          # We set requests.cpu=100m. If the pod uses 60m → 60% utilization → scale.
+          # Why 60%? It gives headroom before we hit the 500m limit (CPU throttling).
+          type: Utilization
+          averageUtilization: {{ .Values.backend.hpa.targetCPUUtilizationPercentage }}
+
+  behavior:
+    # Scale UP fast when load spikes (don't keep users waiting)
+    scaleUp:
+      stabilizationWindowSeconds: 30   # wait 30s of sustained high load before scaling up
+      policies:
+        - type: Pods
+          value: 2          # add at most 2 pods per scale event
+          periodSeconds: 30
+
+    # Scale DOWN slow (avoid flapping: scale down too early → load spikes → scale up again)
+    scaleDown:
+      stabilizationWindowSeconds: 180  # wait 3 minutes of sustained low load before scaling down
+      policies:
+        - type: Pods
+          value: 1          # remove at most 1 pod per scale event
+          periodSeconds: 60

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    # managed-by label lets ArgoCD (and you) quickly identify all chart resources
+    app.kubernetes.io/managed-by: Helm
+    project: gitops-platform

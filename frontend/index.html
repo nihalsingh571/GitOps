@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitOps Demo — Self-Healing Platform</title>
+  <meta name="description" content="A portfolio-grade chaos-engineered self-healing GitOps platform demo dashboard." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #0d1117;
+      --bg-card:   #161b22;
+      --bg-input:  #21262d;
+      --border:    #30363d;
+      --accent:    #238636;
+      --accent-h:  #2ea043;
+      --blue:      #1f6feb;
+      --text:      #e6edf3;
+      --text-muted:#8b949e;
+      --danger:    #da3633;
+      --warning:   #d29922;
+      --radius:    10px;
+      --mono:      'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: -.2px;
+    }
+    .logo span { color: var(--accent-h); }
+    .badge {
+      font-size: .7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: rgba(35,134,54,.2);
+      color: var(--accent-h);
+      border: 1px solid rgba(46,160,67,.3);
+    }
+    .api-url {
+      font-family: var(--mono);
+      font-size: .75rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .card-title {
+      font-size: .8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-muted);
+      margin-bottom: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent-h);
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .3; }
+    }
+
+    /* ── Status grid ── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    .status-item {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      transition: border-color .2s;
+    }
+    .status-item:hover { border-color: var(--blue); }
+    .status-item .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: .3rem;
+    }
+    .status-item .label {
+      font-size: .72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .ok    { color: var(--accent-h); }
+    .err   { color: var(--danger); }
+    .warn  { color: var(--warning); }
+    .info  { color: var(--blue); }
+
+    /* ── Form ── */
+    .form-row {
+      display: flex;
+      gap: .8rem;
+      align-items: center;
+    }
+    input[type="text"] {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .6rem 1rem;
+      color: var(--text);
+      font-size: .9rem;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input[type="text"]:focus { border-color: var(--blue); }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: .6rem 1.2rem;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+      white-space: nowrap;
+    }
+    button:hover  { background: var(--accent-h); }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Items list ── */
+    #items-list {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .item-row {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .6rem 1rem;
+      font-size: .88rem;
+      animation: slideIn .25s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .item-id {
+      font-family: var(--mono);
+      font-size: .75rem;
+      color: var(--text-muted);
+      min-width: 30px;
+    }
+    .empty { color: var(--text-muted); font-size: .88rem; font-style: italic; }
+
+    /* ── Log ── */
+    #log {
+      font-family: var(--mono);
+      font-size: .75rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .8rem 1rem;
+      max-height: 150px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+    .log-ok   { color: var(--accent-h); }
+    .log-err  { color: var(--danger); }
+    .log-info { color: var(--blue); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: .78rem;
+    }
+    footer a { color: var(--blue); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    ⚡ <span>GitOps</span> Demo
+    <span class="badge">Self-Healing</span>
+  </div>
+  <div class="api-url" id="api-url-display">API: /api</div>
+</header>
+
+<main>
+
+  <!-- Status -->
+  <section class="card" aria-label="Platform Status">
+    <div class="card-title"><span class="dot"></span> Platform Health</div>
+    <div class="status-grid">
+      <div class="status-item">
+        <div class="value" id="status-liveness">—</div>
+        <div class="label">Liveness</div>
+      </div>
+      <div class="status-item">
+        <div class="value" id="status-readiness">—</div>
+        <div class="label">Readiness</div>
+      </div>
+      <div class="status-item">
+        <div class="value info" id="status-count">—</div>
+        <div class="label">Items in DB</div>
+      </div>
+      <div class="status-item">
+        <div class="value" id="status-latency">—</div>
+        <div class="label">API Latency</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Add item -->
+  <section class="card" aria-label="Create Item">
+    <div class="card-title">📝 Add Item to Database</div>
+    <div class="form-row">
+      <input
+        type="text"
+        id="item-input"
+        placeholder="Type an item name and press Add…"
+        maxlength="80"
+        aria-label="Item name"
+      />
+      <button id="add-btn" onclick="addItem()">Add</button>
+      <button id="refresh-btn" onclick="loadItems()" style="background:var(--blue);">Refresh</button>
+    </div>
+    <div id="items-list"><p class="empty">Loading items…</p></div>
+  </section>
+
+  <!-- Log -->
+  <section class="card" aria-label="Request Log">
+    <div class="card-title">🖥️ Request Log</div>
+    <div id="log"></div>
+  </section>
+
+</main>
+
+<footer>
+  Chaos-Engineered Self-Healing GitOps Platform &mdash;
+  <a href="/api/docs" target="_blank">API Docs (Swagger)</a> ·
+  <a href="/api/metrics" target="_blank">Prometheus Metrics</a>
+</footer>
+
+<script>
+  // The backend is proxied by NGINX at /api
+  const API = '/api';
+
+  function logLine(msg, cls = 'log-info') {
+    const el = document.getElementById('log');
+    const ts  = new Date().toISOString().slice(11, 23);
+    el.innerHTML += `<div class="${cls}">[${ts}] ${msg}</div>`;
+    el.scrollTop  = el.scrollHeight;
+  }
+
+  async function checkHealth() {
+    const t0 = performance.now();
+    try {
+      const [lRes, rRes] = await Promise.all([
+        fetch(`${API}/health`),
+        fetch(`${API}/ready`),
+      ]);
+      const latency = Math.round(performance.now() - t0);
+
+      const lEl = document.getElementById('status-liveness');
+      const rEl = document.getElementById('status-readiness');
+      const latEl = document.getElementById('status-latency');
+
+      lEl.textContent = lRes.ok ? '✓ Alive' : '✗ Down';
+      lEl.className   = 'value ' + (lRes.ok ? 'ok' : 'err');
+
+      rEl.textContent = rRes.ok ? '✓ Ready' : '✗ Not Ready';
+      rEl.className   = 'value ' + (rRes.ok ? 'ok' : 'warn');
+
+      latEl.textContent = latency + ' ms';
+      latEl.className   = 'value ' + (latency < 200 ? 'ok' : 'warn');
+    } catch (e) {
+      document.getElementById('status-liveness').textContent  = '✗ Error';
+      document.getElementById('status-liveness').className    = 'value err';
+      document.getElementById('status-readiness').textContent = '✗ Error';
+      document.getElementById('status-readiness').className   = 'value err';
+      logLine('Health check failed: ' + e.message, 'log-err');
+    }
+  }
+
+  async function loadItems() {
+    try {
+      const res   = await fetch(`${API}/items`);
+      const items = await res.json();
+      const list  = document.getElementById('items-list');
+      const countEl = document.getElementById('status-count');
+      countEl.textContent = items.length;
+
+      if (items.length === 0) {
+        list.innerHTML = '<p class="empty">No items yet. Add one above!</p>';
+        return;
+      }
+      list.innerHTML = items.map(i =>
+        `<div class="item-row"><span class="item-id">#${i.id}</span><span>${i.name}</span></div>`
+      ).join('');
+      logLine(`Loaded ${items.length} item(s)`, 'log-ok');
+    } catch (e) {
+      logLine('Failed to load items: ' + e.message, 'log-err');
+    }
+  }
+
+  async function addItem() {
+    const input = document.getElementById('item-input');
+    const name  = input.value.trim();
+    if (!name) return;
+
+    const btn = document.getElementById('add-btn');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${API}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const item = await res.json();
+      logLine(`Created item #${item.id}: "${item.name}"`, 'log-ok');
+      input.value = '';
+      await loadItems();
+    } catch (e) {
+      logLine('Add failed: ' + e.message, 'log-err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // Allow Enter key to add
+  document.getElementById('item-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addItem();
+  });
+
+  // Initial load + periodic health checks
+  checkHealth();
+  loadItems();
+  setInterval(checkHealth, 10000);   // health poll every 10s
+  setInterval(loadItems,  30000);    // item refresh every 30s
+
+  logLine('Dashboard initialised. Polling health every 10s.', 'log-info');
+</script>
+
+</body>
+</html>

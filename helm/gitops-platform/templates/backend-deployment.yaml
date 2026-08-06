@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: backend
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+
+  selector:
+    # The selector MUST match the pod template labels below.
+    # This is how the Deployment knows which pods it owns.
+    matchLabels:
+      app: backend
+
+  strategy:
+    # RollingUpdate = replace pods one at a time (zero-downtime deploys)
+    # Recreate = kill all then start all (causes downtime, not suitable here)
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # allow 1 extra pod above replicaCount during rollout
+      maxUnavailable: 0  # never reduce below replicaCount during rollout
+      # Combined: with 2 replicas, at rollout time we temporarily have 3,
+      # and always keep at least 2 serving traffic.
+
+  template:
+    metadata:
+      labels:
+        app: backend
+        # version label is useful for traffic splitting (Istio/Argo Rollouts)
+        version: {{ .Values.backend.image.tag | quote }}
+      annotations:
+        # Prometheus scrape annotations: Prometheus looks for pods with these
+        # and scrapes the /metrics endpoint automatically
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "8000"
+        prometheus.io/path:   "/metrics"
+    spec:
+      # Spread pods across different nodes when possible.
+      # "DoNotSchedule" = hard rule: never put 2 backend pods on the same node.
+      # This means if node minikube-m02 dies, we still have a pod on minikube.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway   # soft rule (DoNotSchedule would be too strict for 2-node cluster)
+          labelSelector:
+            matchLabels:
+              app: backend
+
+      # terminationGracePeriodSeconds: how long Kubernetes waits for the pod
+      # to handle in-flight requests before force-killing it.
+      # Default is 30s. uvicorn shuts down cleanly well within that.
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: backend
+          image: {{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          # Load non-sensitive config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            # Load sensitive config (DB_NAME, DB_USER, DB_PASS) from Secret
+            - secretRef:
+                name: postgres-secret
+
+          resources:
+            requests:
+              cpu:    {{ .Values.backend.resources.requests.cpu | quote }}
+              memory: {{ .Values.backend.resources.requests.memory | quote }}
+            limits:
+              cpu:    {{ .Values.backend.resources.limits.cpu | quote }}
+              memory: {{ .Values.backend.resources.limits.memory | quote }}
+
+          # Liveness probe — is the process alive?
+          # Failure → container restart
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.backend.livenessProbe.httpGet.path }}
+              port: {{ .Values.backend.livenessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.backend.livenessProbe.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.backend.livenessProbe.periodSeconds }}
+            failureThreshold:    {{ .Values.backend.livenessProbe.failureThreshold }}
+
+          # Readiness probe — is the process ready to serve traffic?
+          # Failure → removed from Service endpoints (no restart)
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.backend.readinessProbe.httpGet.path }}
+              port: {{ .Values.backend.readinessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.backend.readinessProbe.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.backend.readinessProbe.periodSeconds }}
+            failureThreshold:    {{ .Values.backend.readinessProbe.failureThreshold }}

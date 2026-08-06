@@ -1,0 +1,171 @@
+# ============================================================
+# values.yaml — single source of truth for all configuration
+# Every value here can be overridden at deploy time with:
+#   helm install ... --set key=value
+# or by passing a custom values file:
+#   helm install ... -f my-overrides.yaml
+# ============================================================
+
+# Kubernetes namespace all resources are deployed into
+namespace: gitops-app
+
+# ── Frontend ─────────────────────────────────────────────────
+frontend:
+  image:
+    repository: gitops-frontend
+    tag: v1
+    # Never = only use locally-loaded image (our minikube image load case)
+    # IfNotPresent = pull only if not already present (use in production)
+    # Always = always pull (CI/CD where the tag is "latest")
+    pullPolicy: Never
+
+  replicaCount: 2   # 2 replicas → survives one pod kill without downtime
+
+  service:
+    type: NodePort   # ClusterIP would require Ingress; NodePort works directly in Minikube
+    port: 80
+    nodePort: 30080  # Fixed port so we always know how to reach the frontend
+
+  resources:
+    # requests = what Kubernetes GUARANTEES to reserve for this container.
+    # The scheduler only places a pod on a node that has this much free.
+    requests:
+      cpu: "50m"      # 50 millicores = 5% of one CPU core
+      memory: "64Mi"  # 64 MiB RAM
+    # limits = the HARD ceiling. If the container exceeds this:
+    #   CPU:    throttled (not killed)
+    #   Memory: OOMKilled and restarted
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+  # Liveness probe: "Is this container still alive?"
+  # Kubernetes RESTARTS the container if this fails consecutively.
+  # We probe NGINX's own /healthz endpoint (returns 200 trivially).
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 80
+    initialDelaySeconds: 10   # wait 10s before first probe (let NGINX start)
+    periodSeconds: 15          # check every 15s
+    failureThreshold: 3        # 3 consecutive failures → restart
+
+  # Readiness probe: "Is this container ready to receive traffic?"
+  # Kubernetes REMOVES the pod from Service endpoints if this fails.
+  # The pod is NOT restarted — traffic just stops going to it.
+  readinessProbe:
+    httpGet:
+      path: /healthz
+      port: 80
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 2
+
+# ── Backend API ───────────────────────────────────────────────
+backend:
+  image:
+    repository: gitops-backend
+    tag: v1
+    pullPolicy: Never
+
+  replicaCount: 2   # 2 replicas → PDB will protect at least 1 during disruptions
+
+  service:
+    type: ClusterIP  # Backend is internal only — frontend (NGINX) proxies to it
+    port: 8000
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"     # HPA will scale out before we hit this ceiling
+      memory: "256Mi"
+
+  livenessProbe:
+    httpGet:
+      path: /health   # FastAPI endpoint we wrote: returns {"status": "alive"}
+      port: 8000
+    initialDelaySeconds: 20   # FastAPI + DB init needs more time than NGINX
+    periodSeconds: 15
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /ready    # FastAPI endpoint: checks DB connection before returning 200
+      port: 8000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 3   # 3 failures → removed from endpoints (DB might be slow)
+
+  # HorizontalPodAutoscaler settings
+  hpa:
+    minReplicas: 2
+    maxReplicas: 5
+    # Scale UP when average CPU across all backend pods exceeds 60%
+    # Scale DOWN when average drops back below 60% (with a cooldown)
+    targetCPUUtilizationPercentage: 60
+
+  # PodDisruptionBudget — "minimum available" style
+  pdb:
+    # At all times, at least 1 backend pod must be Running and Ready.
+    # This prevents: kubectl drain, node upgrades, or Chaos Mesh from
+    # killing ALL backend pods simultaneously.
+    minAvailable: 1
+
+# ── PostgreSQL ────────────────────────────────────────────────
+postgres:
+  image:
+    repository: postgres
+    tag: "16-alpine"   # alpine = smallest official Postgres image
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 5432
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  storage:
+    # PersistentVolumeClaim size for the Postgres data directory
+    size: 1Gi
+    # standard = Minikube's default StorageClass (hostPath provisioner)
+    storageClassName: standard
+
+  livenessProbe:
+    exec:
+      # pg_isready checks if Postgres is accepting connections
+      command: ["pg_isready", "-U", "appuser", "-d", "appdb"]
+    initialDelaySeconds: 30   # Postgres takes time to initialize on first start
+    periodSeconds: 20
+    failureThreshold: 3
+
+  readinessProbe:
+    exec:
+      command: ["pg_isready", "-U", "appuser", "-d", "appdb"]
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── Database credentials (referenced in Secret) ───────────────
+# In a real cluster, these would come from Vault or a Sealed Secret.
+# For this portfolio project, we store them in values.yaml but note
+# that values.yaml should be in .gitignore in production.
+db:
+  name: appdb
+  user: appuser
+  password: Ch4ng3Me!GitOps   # base64-encoded in the Secret template
+
+# ── Ingress ───────────────────────────────────────────────────
+ingress:
+  enabled: true
+  # In Minikube, run "minikube tunnel" to get a reachable IP for this hostname
+  host: gitops.local
+  # Tells the NGINX ingress controller (our addon) to handle this Ingress
+  className: nginx

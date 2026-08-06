@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: frontend
+spec:
+  type: {{ .Values.frontend.service.type }}
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      nodePort: {{ .Values.frontend.service.nodePort }}
+      # nodePort: 30080 → accessible at http://<minikube-ip>:30080
+      # Get the IP with: minikube ip
+      protocol: TCP

@@ -1,0 +1,30 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: backend
+spec:
+  # minAvailable: the minimum number of backend pods that must be Running+Ready
+  # at any point during a VOLUNTARY disruption.
+  #
+  # Voluntary disruptions = things that are PLANNED:
+  #   - kubectl drain (node maintenance)
+  #   - Cluster upgrades
+  #   - Chaos Mesh pod-kill experiments
+  #   - ArgoCD sync deleting pods during rollout
+  #
+  # Involuntary disruptions (node crash, OOM) are NOT governed by PDB —
+  # they're handled by the Deployment's replicaCount recovery.
+  #
+  # With minAvailable=1 and replicaCount=2:
+  #   - Kubernetes is allowed to disrupt at most 1 pod at a time
+  #   - At least 1 pod always serves traffic during disruptions
+  #   - If you try to drain BOTH nodes simultaneously, the second drain blocks
+  #     until the first pod is rescheduled and Ready
+  minAvailable: {{ .Values.backend.pdb.minAvailable }}
+
+  selector:
+    matchLabels:
+      app: backend

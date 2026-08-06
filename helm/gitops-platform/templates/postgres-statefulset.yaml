@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/managed-by: Helm
+spec:
+  # StatefulSet vs Deployment for Postgres:
+  # - StatefulSet gives each pod a STABLE network identity (postgres-0, postgres-1)
+  # - Pods are created/deleted in ORDER (important for primary/replica setups)
+  # - Each pod gets its OWN PVC from volumeClaimTemplates (critical for DB data)
+  # - If the pod restarts, it reattaches to the SAME PVC (data survives pod death)
+  serviceName: postgres   # must match the headless service name below
+  replicas: 1             # single Postgres for this portfolio (no HA replication)
+
+  selector:
+    matchLabels:
+      app: postgres
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # Postgres needs some time to finish WAL writes before dying.
+      terminationGracePeriodSeconds: 60
+
+      # Pin Postgres to the control-plane node.
+      # Minikube's hostpath-provisioner only creates PV directories on the node
+      # where it runs (the control-plane). If Postgres lands on the worker node,
+      # it can't find /tmp/hostpath-provisioner/... and crashes with
+      # CreateContainerConfigError. In production you'd use a network storage
+      # class (EBS, Ceph, NFS) that's accessible from any node.
+      nodeSelector:
+        kubernetes.io/hostname: minikube
+
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+
+          # Postgres official image reads POSTGRES_* env vars on first startup
+          # to create the database and user.
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+
+          resources:
+            requests:
+              cpu:    {{ .Values.postgres.resources.requests.cpu | quote }}
+              memory: {{ .Values.postgres.resources.requests.memory | quote }}
+            limits:
+              cpu:    {{ .Values.postgres.resources.limits.cpu | quote }}
+              memory: {{ .Values.postgres.resources.limits.memory | quote }}
+
+          livenessProbe:
+            exec:
+              command: {{ .Values.postgres.livenessProbe.exec.command | toJson }}
+            initialDelaySeconds: {{ .Values.postgres.livenessProbe.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.postgres.livenessProbe.periodSeconds }}
+            failureThreshold:    {{ .Values.postgres.livenessProbe.failureThreshold }}
+
+          readinessProbe:
+            exec:
+              command: {{ .Values.postgres.readinessProbe.exec.command | toJson }}
+            initialDelaySeconds: {{ .Values.postgres.readinessProbe.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.postgres.readinessProbe.periodSeconds }}
+            failureThreshold:    {{ .Values.postgres.readinessProbe.failureThreshold }}
+
+          volumeMounts:
+            # Mount the PVC at the Postgres data directory.
+            # All database files live here and survive pod restarts.
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              # subPath prevents Postgres from complaining about a non-empty mount root
+              subPath: pgdata
+
+  # volumeClaimTemplates: StatefulSet creates one PVC PER POD from this template.
+  # The PVC is named: <volumeClaimTemplate.name>-<statefulset-name>-<ordinal>
+  # = postgres-data-postgres-0
+  # This PVC persists even if the pod or StatefulSet is deleted (manual cleanup needed).
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]   # only one pod can write at a time (correct for single Postgres)
+        storageClassName: {{ .Values.postgres.storage.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage.size }}

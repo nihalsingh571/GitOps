@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Docker
+.dockerignore
+
+# Helm
+*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets — NEVER commit real secrets to Git
+# In production use Sealed Secrets or External Secrets Operator
+# values.secret.yaml

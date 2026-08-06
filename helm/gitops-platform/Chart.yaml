@@ -1,0 +1,27 @@
+apiVersion: v2
+# apiVersion: v2 means Helm 3. v1 is Helm 2 (deprecated). Always use v2 for new charts.
+
+name: gitops-platform
+description: >
+  A chaos-engineered, self-healing 3-tier application demonstrating GitOps
+  with ArgoCD, observability with Prometheus/Grafana, and resilience patterns
+  (probes, HPA, PDB, resource limits).
+
+# "application" = a deployable app chart. "library" = reusable helpers only.
+type: application
+
+# SemVer for the chart itself — bump this when you change chart structure
+version: 0.1.0
+
+# The version of the application this chart deploys
+appVersion: "1.0.0"
+
+keywords:
+  - gitops
+  - chaos-engineering
+  - kubernetes
+  - self-healing
+
+maintainers:
+  - name: Nihal Kumar
+    email: nihalsingh571@github.com
