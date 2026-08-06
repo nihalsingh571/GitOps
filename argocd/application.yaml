@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitops-platform
+  namespace: argocd
+  # finalizer ensures ArgoCD cleans up all managed resources when the
+  # Application is deleted — prevents orphaned Deployments/Services
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    # The Git repository ArgoCD watches for changes
+    repoURL: https://github.com/nihalsingh571/GitOps.git
+    targetRevision: main   # branch to track
+    path: helm/gitops-platform   # path to the Helm chart inside the repo
+
+    helm:
+      # Pass values inline — overrides values.yaml defaults
+      # This is where you'd put environment-specific values
+      values: |
+        frontend:
+          image:
+            pullPolicy: Never
+        backend:
+          image:
+            pullPolicy: Never
+
+  destination:
+    # Deploy INTO this cluster (the one ArgoCD is running in)
+    server: https://kubernetes.default.svc
+    namespace: gitops-app
+
+  syncPolicy:
+    automated:
+      # prune: true → if you DELETE a resource from Git, ArgoCD deletes it from the cluster
+      # Without this, ArgoCD only adds/updates, never removes
+      prune: true
+      # selfHeal: true → if someone manually changes the cluster (kubectl edit, etc.),
+      # ArgoCD detects the drift and reverts it back to match Git within 3 minutes
+      # This is the "Git is the source of truth" guarantee
+      selfHeal: true
+    syncOptions:
+      # createNamespace: true → ArgoCD creates gitops-app namespace if missing
+      - CreateNamespace=true
+      # ServerSideApply: true → uses server-side apply (avoids annotation size limits)
+      - ServerSideApply=true
