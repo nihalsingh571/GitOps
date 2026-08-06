@@ -19,7 +19,7 @@ frontend:
     # Always = always pull (CI/CD where the tag is "latest")
     pullPolicy: Never
 
-  replicaCount: 2   # 2 replicas → survives one pod kill without downtime
+  replicaCount: 3   # GitOps Demo: Changed from 2 to 3 to trigger auto-sync
 
   service:
     type: NodePort   # ClusterIP would require Ingress; NodePort works directly in Minikube
