@@ -64,6 +64,14 @@ When Chaos Mesh assassinates a pod, the ReplicaSet instantly replaces it. The Po
 ### 4. Live 3-Tier Application
 ![Application Frontend](assets/screenshots/app-frontend.png)
 
+### 5. AI-Assisted CI Debugging 🤖
+To reduce Mean Time To Recovery (MTTR) during development, this repository features an automated, GenAI-powered CI Debugger.
+- **Zero Cost:** Uses GitHub Actions free tier and Groq's free API (`llama-3.1-8b-instant`).
+- **Security & Air-Gapping:** A Python script sanitizes and redacts all logs (stripping tokens, passwords, and API keys) *before* sending them to the LLM. 
+- **Design Boundary:** The AI is strictly **suggestion-only**. It posts root-cause analysis as a PR comment but is mathematically prevented from auto-committing fixes or merging code.
+
+![AI Debugger PR Comment](assets/screenshots/ai-debugger.png)
+
 ---
 
 ## 🚀 How to Run Locally
