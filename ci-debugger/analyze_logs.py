@@ -44,7 +44,7 @@ def truncate_log(log_content, max_chars=15000):
 def analyze_log(log_content):
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        print("Error: GROQ_API_KEY environment variable not set.")
+        print("Error: GROQ_API_KEY environment variable not set.", file=sys.stderr)
         sys.exit(1)
         
     client = Groq(api_key=api_key)
@@ -80,7 +80,7 @@ Log Content:
         )
         print(completion.choices[0].message.content)
     except Exception as e:
-        print(f"Error calling Groq API: {e}")
+        print(f"Error calling Groq API: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
