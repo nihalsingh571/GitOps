@@ -1,0 +1,71 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+        pip install -r ci-debugger/requirements.txt
+        pip install pytest
+
+    - name: Run Tests (and capture logs)
+      id: test_step
+      run: |
+        # Run tests and save output to log file. 
+        # If pytest fails, we print the log so GitHub shows it, then exit 1 to trigger failure state.
+        pytest backend/ > test_log.txt 2>&1 || (cat test_log.txt && exit 1)
+
+    - name: 🤖 AI Debugger (Runs only on failure)
+      if: failure()
+      env:
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        echo "Pipeline failed! Running GenAI CI Debugger..."
+        
+        # 1. Run our python script to analyze the log
+        # It handles redaction and calling the Groq API.
+        python ci-debugger/analyze_logs.py test_log.txt > diagnosis.md
+        
+        # 2. Print it to the Action logs so we can see it
+        echo ""
+        echo "=== AI DIAGNOSIS ==="
+        cat diagnosis.md
+        echo "===================="
+        
+        # 3. Format the markdown for JSON payload using jq
+        COMMENT_BODY=$(jq -Rs . < diagnosis.md)
+        
+        if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+          # 4a. Post to PR comment if it's a Pull Request
+          curl -s -H "Authorization: token $GITHUB_TOKEN" \
+               -H "Accept: application/vnd.github.v3+json" \
+               -X POST -d "{\"body\": $COMMENT_BODY}" \
+               "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
+          echo "✅ Posted diagnosis to PR #$PR_NUMBER"
+        else
+          # 4b. Post to Slack if it's a direct push
+          curl -s -X POST -H 'Content-type: application/json' \
+               --data "{\"text\": $COMMENT_BODY}" \
+               $SLACK_WEBHOOK_URL
+          echo "✅ Posted diagnosis to Slack"
+        fi
