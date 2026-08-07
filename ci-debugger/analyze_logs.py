@@ -74,7 +74,7 @@ Log Content:
 
     try:
         completion = client.chat.completions.create(
-            model="llama3-8b-8192", # Extremely fast and free tier friendly
+            model="llama-3.1-8b-instant", # Extremely fast and free tier friendly
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2, # Low temperature for more deterministic, factual analysis
         )
